@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CompilerConfiguration">
+    <annotationProcessing>
+      <profile default="true" name="Default" enabled="true" />
+      <profile name="Annotation profile for autoibDLMService" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="false">
+          <entry name="$PROJECT_DIR$/../../Maven/maven-repository/org/projectlombok/lombok/1.18.20/lombok-1.18.20.jar" />
+        </processorPath>
+        <module name="autoibDLMService-pojo" />
+        <module name="autoibDLMService-server" />
+        <module name="autoibDLMService-common" />
+      </profile>
+    </annotationProcessing>
+    <bytecodeTargetLevel target="17">
+      <module name="autoibDLMService" target="17" />
+      <module name="autoibDLMService-common" target="17" />
+      <module name="autoibDLMService-pojo" target="17" />
+      <module name="autoibDLMService-server" target="17" />
+    </bytecodeTargetLevel>
+  </component>
+  <component name="JavacSettings">
+    <option name="ADDITIONAL_OPTIONS_OVERRIDE">
+      <module name="autoibDLMService" options="" />
+      <module name="autoibDLMService-common" options="-parameters" />
+      <module name="autoibDLMService-pojo" options="-parameters" />
+      <module name="autoibDLMService-server" options="-parameters" />
+    </option>
+  </component>
+</project>

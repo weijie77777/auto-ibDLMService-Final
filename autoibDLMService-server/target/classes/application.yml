@@ -1,0 +1,61 @@
+server:
+  port: 8080
+spring:
+  application:
+    name: autoibDLMService
+  profiles:
+    active: dev
+  datasource:
+      driver-class-name: ${autoibDLM.datasource.driver-class-name}
+      url: jdbc:mysql://${autoibDLM.datasource.host}:${autoibDLM.datasource.port}/${autoibDLM.datasource.database}?serverTimezone=Asia/Shanghai&useUnicode=true&characterEncoding=utf-8&zeroDateTimeBehavior=convertToNull&useSSL=false&allowPublicKeyRetrieval=true
+      username: ${autoibDLM.datasource.username}
+      password: ${autoibDLM.datasource.password}
+  redis:
+    host: ${autoibDLM.redis.host}
+    port: ${autoibDLM.redis.port}
+    password: ${autoibDLM.redis.password}
+    database: ${autoibDLM.redis.database} # 默认使用的是0号数据库
+  #设置spring的上传大小的限制
+  servlet:
+    multipart:
+      max-file-size: 500MB
+      enabled: true
+      max-request-size: 500MB
+
+mybatis-plus:
+  configuration:
+    #在映射实体或者属性时，将数据库中表名和字段名中的下划线去掉，按照驼峰命名法映射
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: ASSIGN_ID
+
+logging:
+  level:
+    com:
+      sky:
+        mapper: debug
+        service: info
+        controller: info
+    org.apache.ibatis: debug
+    org.springframework.jdbc.support.JdbcTransactionManager: debug
+jwt:
+    # 设置jwt签名加密时使用的秘钥
+    user-secret-key: weijie
+    # 设置jwt过期时间
+    user-ttl: 7200000  # 7200000 2h 默认单位ms
+    # 设置前端传递过来的令牌名称
+    user-token-name: authentication
+aliyun:
+  oss:
+    endpoint: ${autoibDLM.alioss.endpoint}
+    bucketName: ${autoibDLM.alioss.bucketName}
+    region: ${autoibDLM.alioss.region}
+    fileUrl: ${autoibDLM.alioss.fileUrl}
+
+python:
+  service:
+    url: ${autoibDLM.python.service.url}
+
+

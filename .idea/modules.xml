@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/autoibDLMService.iml" filepath="$PROJECT_DIR$/autoibDLMService.iml" />
+      <module fileurl="file://$PROJECT_DIR$/autoibDLMService-common/autoibDLMService-common.iml" filepath="$PROJECT_DIR$/autoibDLMService-common/autoibDLMService-common.iml" />
+      <module fileurl="file://$PROJECT_DIR$/autoibDLMService-pojo/autoibDLMService-pojo.iml" filepath="$PROJECT_DIR$/autoibDLMService-pojo/autoibDLMService-pojo.iml" />
+      <module fileurl="file://$PROJECT_DIR$/autoibDLMService-server/autoibDLMService-server.iml" filepath="$PROJECT_DIR$/autoibDLMService-server/autoibDLMService-server.iml" />
+    </modules>
+  </component>
+</project>

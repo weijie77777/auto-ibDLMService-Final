@@ -1,0 +1,23 @@
+autoibDLM:
+  # 这里的配置换成自己的即可
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    host: localhost
+    port: 3306
+    database: auto-ibdlm
+    username: root
+    password: qwe147258
+  alioss:
+    endpoint: https://oss-cn-chengdu.aliyuncs.com
+    bucketName: java-ai-wei123
+    region: cn-chengdu
+    fileUrl: orginal_data/sample/interaction.csv # sample文件的地址
+  redis:
+    host: localhost
+    port: 6379
+    password: 123456 # 这里的password改成auth 如果是双击redis-server.exe文件的话 如果打开的时候指定了配置文件用password即可
+    database: 5 # 默认使用的是0号数据库
+  # 具体看将python服务端部署到哪里
+  python:
+    service:
+      url: http://localhost:5000
