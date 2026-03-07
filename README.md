@@ -1,2 +1,5 @@
 # auto-ibDLMService-Final
 完整前后端代码
+完整的前后端代码在master分支内
+其中PythonService文件夹内为Python端服务代码
+其中fronted文件夹内为前端代码
