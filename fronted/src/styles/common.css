@@ -1,0 +1,86 @@
+/* 全局通用样式 - 确保所有页面样式一致 */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: "Noto Sans SC";
+}
+
+body {
+  font-family: "Noto Sans SC";
+  margin: 0;
+  padding: 0;
+  background-color: white;
+}
+
+li {
+  list-style: none;
+}
+
+a {
+  text-decoration: none;
+}
+
+.logo {
+  margin-top: 10px;
+  vertical-align: center;
+}
+
+/* 导航栏样式 - 确保所有页面一致 */
+.nav {
+  position: fixed;
+  top: 0;
+  width: 100%;
+  height: 70px;
+  background-color: #fff;
+  z-index: 10;
+}
+
+ul {
+  display: block;
+  list-style-type: disc;
+  margin-block-start: 1em;
+  margin-block-end: 1em;
+  padding-inline-start: 40px;
+  unicode-bidi: isolate;
+}
+
+.nav li {
+  float: left;
+  margin-left: 70px;
+}
+
+.nav li a {
+  display: block;
+  padding: 0;
+  margin-top: -10px;
+  height: 42px;
+  line-height: 60px;
+  font-size: 20px;
+  color: #14235A;
+}
+
+.nav li a:hover {
+  color: #00a4ff;
+  border-bottom: 2px solid #00a4ff;
+}
+
+.nav li a.active {
+  color: #00a4ff;
+  border-bottom: 2px solid #00a4ff;
+}
+
+/* 页脚样式 */
+.footer {
+  margin-top: 20px;
+  width: 100%;
+  height: 100px;
+}
+
+.footer div {
+  margin-top: 30px;
+  margin-left: 20px;
+  font-size: 15px;
+  color: #c8c9cc;
+}
