@@ -9,6 +9,8 @@ import com.auto.constant.RedisConstant;
 import com.auto.dto.AnalysisRequest;
 import com.auto.dto.PredictionResultDTO;
 import com.auto.dto.TrainResultDTO;
+import com.auto.dto.WeightResult;
+import com.auto.entity.FinalPredictForm;
 import com.auto.entity.PretrainForm;
 import com.auto.service.PredictResultService;
 import com.auto.service.impl.NetworkProcessingService;
@@ -28,8 +30,10 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.servlet.http.HttpServletResponse;
+import javax.validation.Valid;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -108,10 +112,35 @@ public class NetworkController {
         }
     }
 
+
+    @GetMapping("/downloadExampleEdgeList")
+    public void downloadSampleEdgeList(HttpServletResponse response) {
+        String fileUrl = stringRedisTemplate.opsForValue().get(RedisConstant.EXAMPLE_EDGELIST);
+        if(fileUrl!=null){
+            int index = fileUrl.indexOf('/', 8); // 从第8位开始找（跳过 https://）
+
+            // 提取 key（第三个 / 之后的内容）
+            String fileUrlKey = fileUrl.substring(index + 1);
+            try {
+                aliOssUtil.downloadEdgeList(response, fileUrlKey);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        else{
+            throw new CustomException("没有找到对应数据");
+        }
+    }
+
     @GetMapping("/analyze")
-    public R<AnalysisResponse> analyzeSnapshots(@RequestParam(defaultValue = "30m") String windowSize) {
+    public R<AnalysisResponse> analyzeSnapshots(@RequestParam String windowSize, @RequestParam Integer only_local) {
+        log.info("windowSize: {}", windowSize);
+        log.info("only_local: {}", only_local);
+        long userId = BaseContext.getCurrentId();
+        String only_local_key = RedisConstant.USER_ONLY_LOCAL+userId;
         try {
-            AnalysisResponse response = analysisService.analyzeSnapshots(windowSize);
+            AnalysisResponse response = analysisService.analyzeSnapshots(windowSize, only_local);
+            stringRedisTemplate.opsForValue().getAndSet(only_local_key, only_local.toString());
             return R.success(response);
         } catch (Exception e){
             return R.error("提取特征错误");
@@ -126,6 +155,26 @@ public class NetworkController {
     public void downloadNode(HttpServletResponse response) {
         long userId = BaseContext.getCurrentId();
         String fileUrl = stringRedisTemplate.opsForValue().get(RedisConstant.USER_FEATURES_X_RESULT+userId);
+        if(fileUrl!=null){
+            int index = fileUrl.indexOf('/', 8); // 从第8位开始找（跳过 https://）
+
+            // 提取 key（第三个 / 之后的内容）
+            String fileUrlKey = fileUrl.substring(index + 1);
+            try {
+                aliOssUtil.downloadEdgeList(response, fileUrlKey);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        else{
+            throw new CustomException("没有找到对应数据");
+        }
+    }
+
+
+    @GetMapping("/downloadExampleNode")
+    public void downloadSampleNode(HttpServletResponse response) {
+        String fileUrl = stringRedisTemplate.opsForValue().get(RedisConstant.EXAMPLE_FEATURES_X);
         if(fileUrl!=null){
             int index = fileUrl.indexOf('/', 8); // 从第8位开始找（跳过 https://）
 
@@ -166,6 +215,25 @@ public class NetworkController {
         }
     }
 
+    @GetMapping("/downloadExampleNetwork")
+    public void downloadSampleNetwork(HttpServletResponse response) {
+        String fileUrl = stringRedisTemplate.opsForValue().get(RedisConstant.EXAMPLE_FEATURES_GLOBAL);
+        if(fileUrl!=null){
+            int index = fileUrl.indexOf('/', 8); // 从第8位开始找（跳过 https://）
+
+            // 提取 key（第三个 / 之后的内容）
+            String fileUrlKey = fileUrl.substring(index + 1);
+            try {
+                aliOssUtil.downloadEdgeList(response, fileUrlKey);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        else{
+            throw new CustomException("没有找到对应数据");
+        }
+    }
+
     /**
      * 用于预训练模型
      * @param pretrainForm
@@ -186,6 +254,9 @@ public class NetworkController {
         pyRequest.put("file_global_url", fileGlobalUrl);
         pyRequest.put("window_size", pretrainForm.getWindowSize());
         pyRequest.put("epochs", pretrainForm.getEpochs());
+        String onlyLocal = stringRedisTemplate.opsForValue().get(RedisConstant.USER_ONLY_LOCAL+userId);
+        int only_local = Integer.parseInt(onlyLocal);
+        pyRequest.put("only_local", only_local);
         // 这里暂时使用restTemplate进行服务间的调用看看效果
         try{
             ResponseEntity<Map> response = restTemplate.postForEntity(
@@ -294,7 +365,9 @@ public class NetworkController {
 
         pyRequest.put("window_size", windowSize);
         pyRequest.put("epochs", epochs);
-        // 这里暂时使用restTemplate进行服务间的调用看看效果
+        String onlyLocal = stringRedisTemplate.opsForValue().get(RedisConstant.USER_ONLY_LOCAL+userId);
+        int only_local = Integer.parseInt(onlyLocal);
+        pyRequest.put("only_local", only_local);
         try{
             ResponseEntity<Map> response = restTemplate.postForEntity(
                     pythonServiceUrl + "/train",
@@ -320,11 +393,15 @@ public class NetworkController {
 
             Map<String, Object> data = (Map<String, Object>) response.getBody().get("data");
             TrainResultDTO result = TrainResultDTO.fromMap(data);
+            log.info("result: {}", result);
+
             String featureSelectorKey = RedisConstant.USER_FEATURE_SELECTOR+userId;
             String gruKey = RedisConstant.USER_MODEL+userId;
+            String representationKey = RedisConstant.USER_LATENT_REPRESENTATION+userId;
             // 获取旧任务 URL（旧值）原子获取旧值并设置新值
             String oldFeatureSelectorUrl = stringRedisTemplate.opsForValue().getAndSet(featureSelectorKey, result.getFeature_selector_url());
             String oldGruUrl = stringRedisTemplate.opsForValue().getAndSet(gruKey, result.getModel_url());
+            String oldRepresentationUrl = stringRedisTemplate.opsForValue().getAndSet(representationKey, result.getLatentRepresentation_url());
 
             // 异步删除旧 OSS 文件（不阻塞新任务）并做对应的判断 避免出现线程安全问题
             if (oldFeatureSelectorUrl != null && !oldFeatureSelectorUrl.equals(result.getFeature_selector_url())) {
@@ -341,6 +418,15 @@ public class NetworkController {
                 executor.execute(() -> {
                     try {
                         aliOssUtil.deleteByUrl(oldGruUrl);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                });
+            }
+            if (oldRepresentationUrl != null && !oldRepresentationUrl.equals(result.getLatentRepresentation_url())) {
+                executor.execute(() -> {
+                    try {
+                        aliOssUtil.deleteByUrl(oldRepresentationUrl);
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
@@ -363,7 +449,7 @@ public class NetworkController {
     @GetMapping("/downloadTrain")
     public void downloadTrain(HttpServletResponse response) {
         long userId = BaseContext.getCurrentId();
-        String fileUrl = stringRedisTemplate.opsForValue().get(RedisConstant.USER_FEATURE_SELECTOR+userId);
+        String fileUrl = stringRedisTemplate.opsForValue().get(RedisConstant.USER_LATENT_REPRESENTATION+userId);
         if(fileUrl!=null){
             int index = fileUrl.indexOf('/', 8); // 从第8位开始找（跳过 https://）
 
@@ -380,14 +466,9 @@ public class NetworkController {
         }
     }
 
-    /**
-     * 下载预训练的模型
-     * @param response
-     */
-    @GetMapping("/downloadTrainModel")
-    public void downloadTrainModel(HttpServletResponse response) {
-        long userId = BaseContext.getCurrentId();
-        String fileUrl = stringRedisTemplate.opsForValue().get(RedisConstant.USER_MODEL+userId);
+    @GetMapping("/downloadExampleTrain")
+    public void downloadExampleTrain(HttpServletResponse response) {
+        String fileUrl = stringRedisTemplate.opsForValue().get(RedisConstant.EXAMPLE_LATENT_REPRESENTATION);
         if(fileUrl!=null){
             int index = fileUrl.indexOf('/', 8); // 从第8位开始找（跳过 https://）
 
@@ -403,20 +484,20 @@ public class NetworkController {
             throw new CustomException("没有找到对应数据");
         }
     }
+
 
 
     @PostMapping("/finalPredict")
-    public R<String> predict(@RequestBody Integer threshold) {
+    public R<String> predict(@Valid @RequestBody FinalPredictForm finalPredictForm) {
         long userId = BaseContext.getCurrentId();
         String fileXUrl = stringRedisTemplate.opsForValue().get(RedisConstant.USER_FEATURES_X_RESULT+userId);
         String fileGlobalUrl = stringRedisTemplate.opsForValue().get(RedisConstant.USER_FEATURES_GLOBAL_RESULT+userId);
         Integer windowSize = Integer.parseInt(stringRedisTemplate.opsForValue().get(RedisConstant.USER_WINDOW_SIZE+userId));
         String feature_selector_url = stringRedisTemplate.opsForValue().get(RedisConstant.USER_FEATURE_SELECTOR +userId);
         String gru_url = stringRedisTemplate.opsForValue().get(RedisConstant.USER_MODEL +userId);
-        log.info("threshold: {}", threshold);
+        log.info("finalPredictForm: {}", finalPredictForm);
         log.info("fileXUrl: {}",fileXUrl);
         log.info("fileGlobalUrl: {}", fileGlobalUrl);
-
 
         // 2. 调用Flask服务
         Map<String, Object> pyRequest = new HashMap<>();
@@ -427,7 +508,14 @@ public class NetworkController {
         log.info("feature_selector_url{}", feature_selector_url.substring(feature_selector_url.lastIndexOf('/')+1));
         log.info("model_url{}", gru_url.substring(gru_url.lastIndexOf('/')+1));
         pyRequest.put("window_size", windowSize);
-        pyRequest.put("threshold", threshold);
+        pyRequest.put("threshold", finalPredictForm.getThreshold());
+        if(finalPredictForm.getTimestep()!=null){
+            log.info("timestep: {}", finalPredictForm.getTimestep());
+            pyRequest.put("timestep", finalPredictForm.getTimestep());
+        }
+        String onlyLocal = stringRedisTemplate.opsForValue().get(RedisConstant.USER_ONLY_LOCAL+userId);
+        int only_local = Integer.parseInt(onlyLocal);
+        pyRequest.put("only_local", only_local);
         try {
             // 这里暂时使用restTemplate进行服务间的调用看看效果
             ResponseEntity<Map> response = restTemplate.postForEntity(
@@ -437,10 +525,61 @@ public class NetworkController {
             );
             log.info("python服务返回结果：{}", response.getBody());
             Map<String, Object> data = (Map<String, Object>) response.getBody().get("data");
+            // 解析并保存预测数据到数据库中
             PredictionResultDTO result = PredictionResultDTO.fromMap(data);
-            result.setThreshold(threshold);
+            result.setThreshold(finalPredictForm.getThreshold());
             log.info("result: {}", result);
-            // 3. 保存结果到数据库
+            predictResultService.saveResult(result);
+            return R.success("保存结果成功");
+        } catch (Exception e) {
+            e.printStackTrace();
+            return R.error(MessageConstant.SERVER_ERROR);
+        }
+    }
+
+    @PostMapping("/finalExamplePredict")
+    public R<String> examplePredict(@Valid @RequestBody FinalPredictForm finalPredictForm) {
+
+        log.info("finalExamplePredict");
+        String fileXUrl = stringRedisTemplate.opsForValue().get(RedisConstant.EXAMPLE_FEATURES_X);
+        String fileGlobalUrl = stringRedisTemplate.opsForValue().get(RedisConstant.EXAMPLE_FEATURES_GLOBAL);
+        String feature_selector_url = stringRedisTemplate.opsForValue().get(RedisConstant.EXAMPLE_FEATURE_SELECTOR);
+        String gru_url = stringRedisTemplate.opsForValue().get(RedisConstant.EXAMPLE_MODEL);
+        log.info("finalPredictForm: {}", finalPredictForm);
+        log.info("fileXUrl: {}",fileXUrl);
+        log.info("fileGlobalUrl: {}", fileGlobalUrl);
+
+        // 2. 调用Flask服务
+        Map<String, Object> pyRequest = new HashMap<>();
+        pyRequest.put("file_x_url", fileXUrl);
+        pyRequest.put("file_global_url", fileGlobalUrl);
+        pyRequest.put("feature_selector_url", feature_selector_url.substring(feature_selector_url.lastIndexOf('/')+1));
+        pyRequest.put("model_url", gru_url.substring(gru_url.lastIndexOf('/')+1));
+        log.info("feature_selector_url{}", feature_selector_url.substring(feature_selector_url.lastIndexOf('/')+1));
+        log.info("model_url{}", gru_url.substring(gru_url.lastIndexOf('/')+1));
+        pyRequest.put("window_size", 7);
+        pyRequest.put("threshold", finalPredictForm.getThreshold());
+        if(finalPredictForm.getTimestep()!=null){
+            log.info("timestep: {}", finalPredictForm.getTimestep());
+            pyRequest.put("timestep", finalPredictForm.getTimestep());
+        }
+        long userId = BaseContext.getCurrentId();
+        String onlyLocal = stringRedisTemplate.opsForValue().get(RedisConstant.USER_ONLY_LOCAL+userId);
+        int only_local = Integer.parseInt(onlyLocal);
+        pyRequest.put("only_local", only_local);
+        try {
+            // 这里暂时使用restTemplate进行服务间的调用看看效果
+            ResponseEntity<Map> response = restTemplate.postForEntity(
+                    pythonServiceUrl + "/finalPredict",
+                    pyRequest,
+                    Map.class
+            );
+            log.info("python服务返回结果：{}", response.getBody());
+            Map<String, Object> data = (Map<String, Object>) response.getBody().get("data");
+            // 解析并保存预测数据到数据库中
+            PredictionResultDTO result = PredictionResultDTO.fromMap(data);
+            result.setThreshold(finalPredictForm.getThreshold());
+            log.info("result: {}", result);
             predictResultService.saveResult(result);
             return R.success("保存结果成功");
         } catch (Exception e) {
@@ -450,7 +589,51 @@ public class NetworkController {
     }
 
 
+    @PostMapping("/featureAnalyze")
+    public R<WeightResult> featureAnalyze() {
+        long userId = BaseContext.getCurrentId();
+        String feature_selector_url = stringRedisTemplate.opsForValue().get(RedisConstant.USER_FEATURE_SELECTOR +userId);
+        // 2. 调用Flask服务
+        Map<String, Object> pyRequest = new HashMap<>();
+        pyRequest.put("feature_selector_url", feature_selector_url);
+        String onlyLocal = stringRedisTemplate.opsForValue().get(RedisConstant.USER_ONLY_LOCAL+userId);
+        int only_local = Integer.parseInt(onlyLocal);
+        pyRequest.put("only_local", only_local);
+        try {
+            // 这里暂时使用restTemplate进行服务间的调用看看效果
+            ResponseEntity<Map> response = restTemplate.postForEntity(
+                    pythonServiceUrl + "/featureAnalyze",
+                    pyRequest,
+                    Map.class
+            );
+            log.info("python服务返回结果：{}", response.getBody());
+            Map<String, Object> data = (Map<String, Object>) response.getBody().get("data");
 
+            WeightResult weightResult = new WeightResult();
+            // 解析weightsMean（Number转Double，适配Python返回的数字类型）
+            List<Number> weightsMeanNum = (List<Number>) data.get("weightsMean");
+            if (weightsMeanNum != null) {
+                List<Double> weightsMean = weightsMeanNum.stream()
+                        .map(Number::doubleValue)
+                        .toList();
+                weightResult.setWeightsMean(weightsMean);
+            }
+            // 2. 解析weightsSum
+            List<Number> weightsSumNum = (List<Number>) data.get("weightsSum");
+            if (weightsSumNum != null) {
+                List<Double> weightsSum = weightsSumNum.stream()
+                        .map(Number::doubleValue)
+                        .toList();
+                weightResult.setWeightsSum(weightsSum);
+            }
+            List<String> featureNames = (List<String>) data.get("featureNames");
+            weightResult.setFeatureNames(featureNames);
+            return R.success(weightResult);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return R.error(MessageConstant.SERVER_ERROR);
+        }
+    }
 
 
 

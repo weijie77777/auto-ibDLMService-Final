@@ -8,5 +8,5 @@ import lombok.Data;
 @Data
 public class AnalysisRequest {
     private String taskId;
-    private String windowSize; // "30m", "1h", "6h", "1d" 划分窗口的大小
+    private String windowSize; // "30m", "1h", "6h", "1d" 划分窗口的大
 }

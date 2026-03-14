@@ -38,7 +38,7 @@ public class SnapshotAnalysisService {
     @Qualifier("taskExecutor")  // 指定 Bean 名称
     private ThreadPoolTaskExecutor executor;
 
-    public AnalysisResponse analyzeSnapshots(String windowSize) throws Exception {
+    public AnalysisResponse analyzeSnapshots(String windowSize, Integer only_local) throws Exception {
         // 1. 读取边列表数据 从redis缓存中读取对应的边列表文件
         long userId = BaseContext.getCurrentId();
 
@@ -70,7 +70,7 @@ public class SnapshotAnalysisService {
             addEdgesToGraph(cumulativeGraph, snapshotEdges);
 
             // 计算网络层面指标
-            AnalysisResponse.SnapshotMetrics.GraphMetrics graphMetrics = calculateGraphMetrics(cumulativeGraph);
+            AnalysisResponse.SnapshotMetrics.GraphMetrics graphMetrics = calculateGraphMetrics(cumulativeGraph, only_local);
 
             // 计算节点级指标
             AnalysisResponse.SnapshotMetrics.NodeMetrics nodeMetrics = calculateNodeMetrics(cumulativeGraph);
@@ -101,7 +101,7 @@ public class SnapshotAnalysisService {
         // 6. 存储计算出的特征属性
 
         // TODO 存储节点层面属性
-        String fileXPath= exportFeaturesToCsv(snapshotMetrics,"_x.csv", OssConstant.FEATURES_PARENT_PATH + "/"+ userId + "/" + taskId, FeatureTypeConstant.FEATURES_X);
+        String fileXPath= exportFeaturesToCsv(snapshotMetrics,"_x.csv", OssConstant.FEATURES_PARENT_PATH + "/"+ userId + "/" + taskId, FeatureTypeConstant.FEATURES_X, only_local);
 
         String redis_features_x_Key = RedisConstant.USER_FEATURES_X_RESULT + userId;
 
@@ -119,7 +119,7 @@ public class SnapshotAnalysisService {
         }
 
         // TODO 存储网络层面属性 这里先重复 后面再提取公共方法
-        String fileGlobalPath= exportFeaturesToCsv(snapshotMetrics,"_global.csv", OssConstant.FEATURES_PARENT_PATH + "/"+ userId + "/" + taskId, FeatureTypeConstant.FEATURES_GLOBAL);
+        String fileGlobalPath= exportFeaturesToCsv(snapshotMetrics,"_global.csv", OssConstant.FEATURES_PARENT_PATH + "/"+ userId + "/" + taskId, FeatureTypeConstant.FEATURES_GLOBAL, only_local);
 
         String redis_features_global_Key = RedisConstant.USER_FEATURES_GLOBAL_RESULT + userId;
 
@@ -198,15 +198,20 @@ public class SnapshotAnalysisService {
         }
     }
 
-    private AnalysisResponse.SnapshotMetrics.GraphMetrics calculateGraphMetrics(Graph<Integer, DefaultEdge> graph) {
+    private AnalysisResponse.SnapshotMetrics.GraphMetrics calculateGraphMetrics(Graph<Integer, DefaultEdge> graph, Integer only_local) {
         AnalysisResponse.SnapshotMetrics.GraphMetrics metrics = new AnalysisResponse.SnapshotMetrics.GraphMetrics();
 
         int nodeCount = graph.vertexSet().size();
-        int edgeCount = graph.edgeSet().size();
 
         metrics.setNodeCount(nodeCount);
-        metrics.setEdgeCount(edgeCount);
+        if(only_local==0){
+            // 如果只计算节点层面属性的话 就直接返回
+            log.info("只计算节点特征: {}", only_local);
+            return metrics;
+        }
 
+        int edgeCount = graph.edgeSet().size();
+        metrics.setEdgeCount(edgeCount);
         // 计算密度、直径和平均最短路径
         if (nodeCount > 1) {
             double density = (2.0 * edgeCount) / (nodeCount * (nodeCount - 1)); //！！！未考虑重复边的上限，对于重复边的图，该值会稍大。
@@ -263,8 +268,8 @@ public class SnapshotAnalysisService {
                             executeCommand(command);
                             Double[] result = parseResultFile(outputFile);
 
-                            log.info("完成计算: {}_{} - mean: {}, std: {}",
-                                    direction, feature, result[0], result[1]);
+//                            log.info("完成计算: {}_{} - mean: {}, std: {}",
+//                                    direction, feature, result[0], result[1]);
 
                             return new MetricResult(direction, feature, result[0], result[1]);
 
@@ -316,7 +321,7 @@ public class SnapshotAnalysisService {
      */
     private void executeCommand(List<String> command) throws IOException, InterruptedException {
         String cmdStr = String.join(" ", command);
-        log.info("执行命令: {}", cmdStr);
+//        log.info("执行命令: {}", cmdStr);
 
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.directory(new File("."));  // 设置工作目录
@@ -325,19 +330,19 @@ public class SnapshotAnalysisService {
         Process process = pb.start();
 
         // 打印C++程序输出
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                log.info("[C++] {}", line);
-            }
-        }
+//        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+//            String line;
+//            while ((line = reader.readLine()) != null) {
+//                log.info("[C++] {}", line);
+//            }
+//        }
 
         int exitCode = process.waitFor();
         if (exitCode != 0) {
             throw new RuntimeException("命令执行失败，退出码: " + exitCode + ", 命令: " + cmdStr);
         }
 
-        log.info("命令执行成功");
+//        log.info("命令执行成功");
     }
 
     /**
@@ -469,10 +474,9 @@ public class SnapshotAnalysisService {
 
     }
 
-    private String exportFeaturesToCsv(List<AnalysisResponse.SnapshotMetrics> snapshotMetrics, String originalFilename, String parentPath, String featureType) throws Exception {
+    private String exportFeaturesToCsv(List<AnalysisResponse.SnapshotMetrics> snapshotMetrics, String originalFilename, String parentPath, String featureType, Integer only_local) throws Exception {
         // 2. 生成 CSV 内容到内存（不写本地磁盘）
-        byte[] csvContent = generateCsvBytes(snapshotMetrics, featureType);
-        // 新增：校验生成的字节数组是否为空，避免上传0字节文件
+        byte[] csvContent = generateCsvBytes(snapshotMetrics, featureType, only_local);
         if (csvContent.length == 0) {
             throw new IllegalArgumentException("生成的CSV内容为空，请检查featureType或snapshotMetrics数据");
         }
@@ -481,7 +485,7 @@ public class SnapshotAnalysisService {
     }
 
     // 生成对应的features csv字节数组 方便后续上传至OSS中
-    private byte[] generateCsvBytes(List<AnalysisResponse.SnapshotMetrics> snapshotMetrics, String featureType) throws IOException {
+    private byte[] generateCsvBytes(List<AnalysisResponse.SnapshotMetrics> snapshotMetrics, String featureType, Integer only_local) throws IOException {
         // 提前校验：空列表直接返回有提示的空内容，而非纯0字节
         if (snapshotMetrics == null || snapshotMetrics.isEmpty()) {
             return "无可用数据".getBytes(StandardCharsets.UTF_8);
@@ -561,31 +565,42 @@ public class SnapshotAnalysisService {
                     csvWriter.writeNext(row);
                 }
             } else if (featureType.equals(FeatureTypeConstant.FEATURES_GLOBAL)) {
-                // 修复：表头重复问题，且匹配实际字段含义
-                String[] header = {"node_count", "edge_count", "density", "diameter", "average_path_length"};
-                csvWriter.writeNext(header);
+                if(only_local==0){
+                    String[] header = {"node_count"};
+                    csvWriter.writeNext(header);
 
-                // 数据行
-                for (AnalysisResponse.SnapshotMetrics snapshotMetric : snapshotMetrics) {
-                    String[] row = {
-                            String.valueOf(snapshotMetric.getGraphLevel().getNodeCount()),
-                            String.valueOf(snapshotMetric.getGraphLevel().getEdgeCount()),
-                            String.valueOf(snapshotMetric.getGraphLevel().getDensity()),
-                            String.valueOf(snapshotMetric.getGraphLevel().getDiameter()),
-                            String.valueOf(snapshotMetric.getGraphLevel().getAveragedistance()),
-                    };
-                    csvWriter.writeNext(row);
+                    // 数据行
+                    for (AnalysisResponse.SnapshotMetrics snapshotMetric : snapshotMetrics) {
+                        String[] row = {
+                                String.valueOf(snapshotMetric.getGraphLevel().getNodeCount()),
+                        };
+                        csvWriter.writeNext(row);
+                    }
+                }
+                else{
+                    String[] header = {"node_count", "edge_count", "density", "diameter", "average_path_length"};
+                    csvWriter.writeNext(header);
+
+                    // 数据行
+                    for (AnalysisResponse.SnapshotMetrics snapshotMetric : snapshotMetrics) {
+                        String[] row = {
+                                String.valueOf(snapshotMetric.getGraphLevel().getNodeCount()),
+                                String.valueOf(snapshotMetric.getGraphLevel().getEdgeCount()),
+                                String.valueOf(snapshotMetric.getGraphLevel().getDensity()),
+                                String.valueOf(snapshotMetric.getGraphLevel().getDiameter()),
+                                String.valueOf(snapshotMetric.getGraphLevel().getAveragedistance()),
+                        };
+                        csvWriter.writeNext(row);
+                    }
                 }
             } else {
-                // 新增：处理未知featureType，避免无数据写入
                 csvWriter.writeNext(new String[]{"错误：未知的featureType", featureType});
             }
 
-            // 核心修复：强制刷新CSVWriter的缓存到Writer，再刷新Writer到ByteArrayOutputStream
             csvWriter.flush();
             writer.flush();
 
-        } // try-with-resources 会自动关闭csvWriter和writer
+        }
         byte[] result = baos.toByteArray();
         return result;
     }

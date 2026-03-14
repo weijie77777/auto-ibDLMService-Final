@@ -16,4 +16,14 @@ public class RedisConstant {
 
     public static final String USER_FEATURE_SELECTOR = "feature_selector";
     public static final String USER_MODEL = "gru";
+    public static final String USER_LATENT_REPRESENTATION = "latent_representation";
+    public static final String USER_ONLY_LOCAL = "only_local";
+
+    // 存放example
+    public static final String EXAMPLE_EDGELIST = "example_edgeList";
+    public static final String EXAMPLE_FEATURES_X = "example_feature_x";
+    public static final String EXAMPLE_FEATURES_GLOBAL = "example_feature_global";
+    public static final String EXAMPLE_LATENT_REPRESENTATION = "example_latent_representation";
+    public static final String EXAMPLE_FEATURE_SELECTOR = "example_feature_selector";
+    public static final String EXAMPLE_MODEL = "example_gru";
 }
